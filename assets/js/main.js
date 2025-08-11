@@ -39,22 +39,30 @@ const css=(name,f)=>{const v=getComputedStyle(document.documentElement).getPrope
 const setTxt=(id,v)=>{const e=$(id); if(e) e.textContent=String(v);};
 const hm=(t)=>{const m=/^(\d{1,2}):(\d{2})$/.exec((t||"").trim()); if(!m) return 0; const h=Math.min(23,Math.max(0,+m[1]||0)), mi=Math.min(59,Math.max(0,+m[2]||0)); return h*3600+mi*60;};
 const hms=(s)=>{s=Math.max(0,Math.floor(s||0));const H=Math.floor(s/3600),M=Math.floor((s%3600)/60),S=s%60;return`${String(H).padStart(2,"0")}:${String(M).padStart(2,"0")}:${String(S).padStart(2,"0")}`;};
-const debounce=(fn,ms=400)=>{let t;return(...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms);}};
+const mmToHHMM=(mins)=>{mins=Math.max(0,Math.floor(mins||0));const H=Math.floor(mins/60),M=mins%60;return`${String(H).padStart(2,"0")}:${String(M).padStart(2,"0")}`;};
+const HHMMtoMin=(txt)=>{const m=/^(\d{1,2}):(\d{2})$/.exec(String(txt||"").trim()); if(!m) return 0; const h=+m[1],mi=+m[2]; return (isFinite(h)&&isFinite(mi))? (h*60+mi) : 0;};
+const debounce=(fn,ms=400)=>{let t;return(...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms);}}; 
 
-/* =================== SHIFT TIME =================== */
+/* =================== SHIFT / BREAKS =================== */
+/* Artık breaksTotal (HH:MM) üzerinden hesaplıyor */
 function computeActiveWorkSec(){
-  const start=hm($("shiftStart")?.value||"08:00"), end=hm($("shiftEnd")?.value||"16:30");
-  let dur=Math.max(0,end-start);
-  ( ($("breaks")?.value)||"" ).split(/\n+/).map(s=>s.trim()).filter(Boolean).forEach(line=>{
-    const [a,b]=(line||"").split("-").map(s=>s.trim()); if(!a||!b) return;
-    const bs=hm(a), be=hm(b), s=Math.max(start,Math.min(end,bs)), e=Math.max(start,Math.min(end,be)); if(e>s) dur-=(e-s);
-  });
-  appState.activeWorkSec=Math.max(0,dur);
+  const start=hm($("shiftStart")?.value||"08:00");
+  const end  =hm($("shiftEnd")?.value||"16:30");
+  const dur  = Math.max(0,end-start);             // saniye
+  const breaksMin = HHMMtoMin($("breaksTotal")?.value||"00:00");
+  const breaksSec = breaksMin*60;
+
+  const net = Math.max(0, dur - breaksSec);
+  appState.activeWorkSec = net;
+
   setTxt("pillActive", `${hms(appState.activeWorkSec)} (${Math.floor(appState.activeWorkSec/60)} min)`);
+
+  // ekrana net (HH:MM) yaz
+  const $net = $("netWorkTime");
+  if ($net) $net.value = mmToHHMM(Math.floor(net/60));
 }
 
 /* =================== INPUTS =================== */
-// Toleranslı preferans parser: "1-3,5", "1 3 5", "S1 S2", "1;2;5"
 function parsePref(txt,nS){
   if(!txt) return null;
   txt=String(txt).trim();
@@ -87,7 +95,6 @@ function readInputs(){
   appState.maxStationsPerPerson= +$("maxStationsPerPerson").value||1;
   appState.speed= Math.max(1,+$("speed").value||1);
   appState.targetCycle= +$("targetCycle").value||null;
-  // fan-out (20 station mapping: S1 -> S1..Sk, S2-> next block)
   appState.fanOut = Math.max(1, +($("fanOut")?.value||1));
 
   setTxt("pillLineVal",appState.lineType); setTxt("pillPeopleVal",appState.people); setTxt("pillSpeedVal",appState.speed); setTxt("pillTarget",appState.targetCycle||"—");
@@ -109,7 +116,6 @@ function readInputs(){
 }
 
 /* =================== BALANCE =================== */
-/* fan-out dağıtım + pin'lere saygı */
 function balanceOperations(){
   const totalStations=appState.lineType;
   const maxActive=appState.people*appState.maxStationsPerPerson;
@@ -119,7 +125,7 @@ function balanceOperations(){
   const fanOut = (totalStations===20 ? Math.max(1, appState.fanOut||1) : 1);
   const srcGroups = (fanOut>1 ? Math.ceil(nStations / fanOut) : nStations);
 
-  // 1) Pin'li operasyonlar
+  // 1) pin'li ops
   appState.operations.forEach((op,idx)=>{
     const pref=op.preferredStation;
     if(pref!=null && pref>=1){
@@ -135,7 +141,7 @@ function balanceOperations(){
     }
   });
 
-  // 2) Kalanlar
+  // 2) kalanlar
   appState.operations.forEach((op,idx)=>{
     if(op.__p){ delete op.__p; return; }
     if(fanOut>1 && op.preferredStation!=null && op.preferredStation>=1 && op.preferredStation<=srcGroups){
@@ -156,16 +162,14 @@ function balanceOperations(){
   return { nStations, loads };
 }
 
-/* =================== PEOPLE ASSIGN (LOCAL CONTIGUOUS) =================== */
+/* =================== PEOPLE ASSIGN =================== */
 function assignPeople(nS, people, maxSpan){
   const useP = Math.max(1, Math.min(people, nS));
   const cap  = Math.max(1, maxSpan);
   const res  = new Array(nS).fill(null);
 
-  // çekirdek aralıklar
   const core = Array.from({length:useP+1},()=>({min:+Infinity,max:-Infinity,count:0}));
 
-  // 1) Tercihler
   for(let p=1;p<=useP;p++){
     const pref = appState.personPrefs?.[p];
     if(!pref) continue;
@@ -181,7 +185,6 @@ function assignPeople(nS, people, maxSpan){
     }
   }
 
-  // 2) Yakın boşlukları doldur
   for(let i=0;i<nS;i++){
     if(res[i]!=null) continue;
     let bestP=-1, bestScore=Infinity;
@@ -202,10 +205,10 @@ function assignPeople(nS, people, maxSpan){
   return res;
 }
 
-/* =================== QC / TEST SET =================== */
+/* =================== QC =================== */
 function qcSet(nS){
-  if(nS===7) return new Set([6]);              // 0-based S7
-  if(nS===20) return new Set([15,16,17,18,19]); // S16..S20
+  if(nS===7) return new Set([6]);
+  if(nS===20) return new Set([15,16,17,18,19]);
   return new Set();
 }
 
@@ -396,7 +399,7 @@ export function applyAll(){
   computeActiveWorkSec(); appState.shiftNotified=false;
 }
 
-/* =================== REPORT (full-width charts) =================== */
+/* =================== REPORT =================== */
 function renderReport(){
   const old=document.getElementById("reportCard"); if(old) old.remove();
 
@@ -505,8 +508,9 @@ function renderReport(){
     });
 
     Promise.all(svgs.map(loadSvg)).then(([a,b])=>{
+      const ySplit = svg1.height.baseVal.value+12;
       ctx.drawImage(a.img,0,0); URL.revokeObjectURL(a.url);
-      ctx.drawImage(b.img,0,svg1.height.baseVal.value+12); URL.revokeObjectURL(b.url);
+      ctx.drawImage(b.img,0,ySplit); URL.revokeObjectURL(b.url);
       const aTag=document.createElement("a");
       aTag.href=c.toDataURL("image/png");
       aTag.download=`report-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.png`;
@@ -515,9 +519,8 @@ function renderReport(){
   });
 }
 
-/* =================== SIM STATE & PERSON-CENTRIC SCHEDULER =================== */
+/* =================== SIM =================== */
 let stBusy=[], stRemain=[], stTotal=[], queueNext=[], personBusy=[], personAt=[], stColor=[], stPid=[];
-
 function setupSim(){
   const n=appState.stationMsBase.length;
   stBusy=new Array(n).fill(false); stRemain=new Array(n).fill(0); stTotal=appState.stationMsBase.slice();
@@ -542,7 +545,6 @@ function clearStationsVisual(){
 }
 function renderClock(){ const s=Math.floor(appState.simClockSec); setTxt("pillClock", `${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`); }
 
-/* Transit (0 ms) istasyonları kişisiz zincir halinde ileri it */
 function pushNextFrom(s, tok){
   const n=stBusy.length;
   let k=s+1;
@@ -564,7 +566,6 @@ function pushNextFrom(s, tok){
   queueNext[k].push(tok);
 }
 
-/* person-odaklı planlayıcı */
 function scheduleIdlePeople(){
   const n = stBusy.length;
   const byP = {};
@@ -697,13 +698,122 @@ export function pause(){ if(!appState.running) return; appState.running=false; i
 export function reset(){ pause(); setupSim(); renderPeople(); renderOps(); renderPack(); renderSuggestions(); computeActiveWorkSec(); }
 
 /* =================== SCENARIO / EDITOR / EXPORT =================== */
-function scenario(){ return { meta:{ts:Date.now()}, inputs:{ lineType:appState.lineType, people:appState.people, maxStationsPerPerson:appState.maxStationsPerPerson, speed:appState.speed, targetCycle:appState.targetCycle, shiftStart:$("shiftStart")?.value||"", shiftEnd:$("shiftEnd")?.value||"", breaks:$("breaks")?.value||"", fanOut: appState.fanOut }, operations:appState.operations, personNames:appState.personNames, personPrefs:appState.personPrefs.map(s=>s?Array.from(s):null) }; }
-function applyScenario(sc){ $("lineType").value=sc.inputs?.lineType??7; $("people").value=sc.inputs?.people??6; $("maxStationsPerPerson").value=sc.inputs?.maxStationsPerPerson??4; $("speed").value=sc.inputs?.speed??50; $("targetCycle").value=sc.inputs?.targetCycle??""; $("shiftStart").value=sc.inputs?.shiftStart??"08:00"; $("shiftEnd").value=sc.inputs?.shiftEnd??"16:30"; $("breaks").value=sc.inputs?.breaks??""; if($("fanOut")) $("fanOut").value=sc.inputs?.fanOut??1; $("opsJson").value=JSON.stringify(sc.operations||[],null,2); applyAll(); setTimeout(()=>{ (sc.personNames||[]).forEach((nm,i)=>{const e=$(`p${i+1}name`); if(e) e.value=nm;}); (sc.personPrefs||[]).forEach((arr,i)=>{const e=$(`prefP${i+1}`); if(e) e.value=(arr||[]).join(",");}); },0); }
+function scenario(){ 
+  return { 
+    meta:{ts:Date.now()}, 
+    inputs:{ 
+      lineType:appState.lineType, people:appState.people, maxStationsPerPerson:appState.maxStationsPerPerson, 
+      speed:appState.speed, targetCycle:appState.targetCycle,
+      shiftStart:$("shiftStart")?.value||"", shiftEnd:$("shiftEnd")?.value||"",
+      breaksTotal:$("breaksTotal")?.value||"", fanOut: appState.fanOut 
+    }, 
+    operations:appState.operations, personNames:appState.personNames, personPrefs:appState.personPrefs.map(s=>s?Array.from(s):null) 
+  }; 
+}
+function applyScenario(sc){ 
+  $("lineType").value=sc.inputs?.lineType??7; $("people").value=sc.inputs?.people??6; $("maxStationsPerPerson").value=sc.inputs?.maxStationsPerPerson??4; 
+  $("speed").value=sc.inputs?.speed??50; $("targetCycle").value=sc.inputs?.targetCycle??""; 
+  $("shiftStart").value=sc.inputs?.shiftStart??"08:00"; $("shiftEnd").value=sc.inputs?.shiftEnd??"16:30"; 
+  $("breaksTotal").value=sc.inputs?.breaksTotal??"00:00"; 
+  if($("fanOut")) $("fanOut").value=sc.inputs?.fanOut??1; 
+  $("opsJson").value=JSON.stringify(sc.operations||[],null,2); 
+  applyAll(); 
+  setTimeout(()=>{ 
+    (sc.personNames||[]).forEach((nm,i)=>{const e=$(`p${i+1}name`); if(e) e.value=nm;}); 
+    (sc.personPrefs||[]).forEach((arr,i)=>{const e=$(`prefP${i+1}`); if(e) e.value=(arr||[]).join(",");}); 
+  },0); 
+}
 function saveScenario(){ const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([JSON.stringify(scenario(),null,2)],{type:"application/json"})); a.download=`line-balance-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`; a.click(); URL.revokeObjectURL(a.href); }
 function loadScenarioFromFile(f){ const fr=new FileReader(); fr.onload=()=>{ try{ applyScenario(JSON.parse(String(fr.result||"{}"))); }catch{ alert("Invalid scenario file"); } }; fr.readAsText(f); }
 function csvEscape(s){s=String(s||"");return(s.includes(",")||s.includes('"')||s.includes("\n"))?`"${s.replace(/"/g,'""')}"`:s;}
-function exportCSV(){ const n=appState.stationTimesSec.length, useP=Math.max(0,...appState.personOfStation), lines=[ "Section,Key,Value", `Inputs,LineType,${appState.lineType}`, `Inputs,People,${appState.people}`, `Inputs,MaxStationsPerPerson,${appState.maxStationsPerPerson}`, `Inputs,Speed,${appState.speed}`, `Inputs,TargetCycle,${appState.targetCycle||""}`, `Inputs,FanOut,${appState.fanOut||1}`, `KPI,Throughput,${appState.throughput}`, `KPI,Bottleneck,${appState.kpiBottleneck}`, `KPI,BalanceRate,${appState.kpiBalance}`, "", "Stations,Station,TotalSec,AssignedPerson" ]; for(let s=0;s<n;s++) lines.push(`Station,S${s+1},${appState.stationTimesSec[s]||0},P${appState.personOfStation[s]||"-"}`); lines.push("", "People,Person,Name,Pref,Stations"); for(let p=1;p<=useP;p++){ const name=appState.personNames?.[p-1]||`P${p}`, pref=(appState.personPrefs?.[p] && Array.from(appState.personPrefs[p]).sort((a,b)=>a-b).join(","))||"", stations=appState.personOfStation.map((pp,i)=>pp===p?`S${i+1}`:null).filter(Boolean).join(" "); lines.push(`Person,P${p},${csvEscape(name)},${csvEscape(pref)},${csvEscape(stations)}`);} const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([lines.join("\n")],{type:"text/csv"})); a.download=`line-balance-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.csv`; a.click(); URL.revokeObjectURL(a.href); }
+function exportCSV(){ const n=appState.stationTimesSec.length, useP=Math.max(0,...appState.personOfStation), lines=[ 
+  "Section,Key,Value", 
+  `Inputs,LineType,${appState.lineType}`, `Inputs,People,${appState.people}`, `Inputs,MaxStationsPerPerson,${appState.maxStationsPerPerson}`, 
+  `Inputs,Speed,${appState.speed}`, `Inputs,TargetCycle,${appState.targetCycle||""}`, `Inputs,FanOut,${appState.fanOut||1}`,
+  `Inputs,ShiftStart,${$("shiftStart")?.value||""}`, `Inputs,ShiftEnd,${$("shiftEnd")?.value||""}`, `Inputs,TotalBreaks,${$("breaksTotal")?.value||""}`,
+  `KPI,Throughput,${appState.throughput}`, `KPI,Bottleneck,${appState.kpiBottleneck}`, `KPI,BalanceRate,${appState.kpiBalance}`, 
+  "", "Stations,Station,TotalSec,AssignedPerson" 
+]; 
+for(let s=0;s<n;s++) lines.push(`Station,S${s+1},${appState.stationTimesSec[s]||0},P${appState.personOfStation[s]||"-"}`);
+lines.push("", "People,Person,Name,Pref,Stations"); 
+for(let p=1;p<=useP;p++){ const name=appState.personNames?.[p-1]||`P${p}`, pref=(appState.personPrefs?.[p] && Array.from(appState.personPrefs[p]).sort((a,b)=>a-b).join(","))||"", stations=appState.personOfStation.map((pp,i)=>pp===p?`S${i+1}`:null).filter(Boolean).join(" "); lines.push(`Person,P${p},${csvEscape(name)},${csvEscape(pref)},${csvEscape(stations)}`);} 
+const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([lines.join("\n")],{type:"text/csv"})); a.download=`line-balance-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.csv`; a.click(); URL.revokeObjectURL(a.href); 
+}
 
+/* =================== INLINE PICKERS =================== */
+/* Basit popup: time (AM/PM) ve duration için */
+(function addPickerStyles(){
+  const css = `.picker-pop{position:absolute;z-index:9999;background:#0c172b;border:1px solid #1b2a44;border-radius:10px;padding:8px;box-shadow:0 6px 22px rgba(0,0,0,.35)}
+  .picker-pop .row{display:flex;gap:6px;align-items:center}
+  .picker-pop select,.picker-pop button{background:#0f1b2d;color:#cfe2ff;border:1px solid #1b2a44;border-radius:8px;padding:6px}
+  .picker-pop button{cursor:pointer}
+  .picker-pop .ok{background:#163a63;border-color:#1f5b94}`;
+  const st=document.createElement("style"); st.textContent=css; document.head.appendChild(st);
+})();
+function attachPickers(){
+  const makePopup=(host,content,onOk)=>{
+    const r=host.getBoundingClientRect();
+    const pop=document.createElement("div"); pop.className="picker-pop";
+    pop.style.left=(window.scrollX+r.left)+"px"; pop.style.top=(window.scrollY+r.bottom+6)+"px";
+    pop.innerHTML=content;
+    document.body.appendChild(pop);
+    const close=()=>{ pop.remove(); document.removeEventListener("click",outside,true); };
+    function outside(e){ if(!pop.contains(e.target) && e.target!==host){ close(); } }
+    document.addEventListener("click",outside,true);
+    pop.querySelector(".ok")?.addEventListener("click",()=>{ onOk(pop); close(); });
+  };
+
+  // TIME picker (AM/PM)
+  document.querySelectorAll('input[data-picker="time"]').forEach(inp=>{
+    inp.addEventListener("focus", ()=>{
+      const val = inp.value.trim();
+      let H = (/^(\d\d):/.exec(val)?.[1])|0, M = (/:([0-9]{2})$/.exec(val)?.[1])|0;
+      let ampm = H>=12 ? "PM":"AM";
+      let h12 = H%12; if(h12===0) h12=12;
+
+      const hrs=[...Array(12)].map((_,i)=>i+1).map(n=>`<option ${n===h12?"selected":""}>${n}</option>`).join("");
+      const mins=[0,5,10,15,20,25,30,35,40,45,50,55].map(n=>`<option ${n===M?"selected":""}>${String(n).padStart(2,"0")}</option>`).join("");
+      const html=`<div class="row" style="gap:8px">
+        <select class="h">${hrs}</select>
+        <span>:</span>
+        <select class="m">${mins}</select>
+        <select class="ap"><option ${ampm==="AM"?"selected":""}>AM</option><option ${ampm==="PM"?"selected":""}>PM</option></select>
+        <button class="ok">OK</button>
+      </div>`;
+      makePopup(inp, html, (pop)=>{
+        const h = +pop.querySelector(".h").value;
+        const m = +pop.querySelector(".m").value;
+        const ap= pop.querySelector(".ap").value;
+        let hh = (ap==="PM"? (h%12)+12 : (h%12));
+        if(hh===24) hh=12;
+        inp.value = `${String(hh).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
+        computeActiveWorkSec();
+      });
+    });
+  });
+
+  // DURATION picker (HH:MM)
+  document.querySelectorAll('input[data-picker="duration"]').forEach(inp=>{
+    inp.addEventListener("focus", ()=>{
+      const [h0,m0]=(inp.value||"00:00").split(":").map(x=>+x||0);
+      const hrs=[...Array(13)].map((_,i)=>`<option ${i===h0?"selected":""}>${i}</option>`).join("");
+      const mins=[0,5,10,15,20,25,30,35,40,45,50,55].map(n=>`<option ${n===m0?"selected":""}>${String(n).padStart(2,"0")}</option>`).join("");
+      const html=`<div class="row" style="gap:8px">
+        <select class="h">${hrs}</select>
+        <span>:</span>
+        <select class="m">${mins}</select>
+        <button class="ok">OK</button>
+      </div>`;
+      makePopup(inp, html, (pop)=>{
+        const h=+pop.querySelector(".h").value, m=+pop.querySelector(".m").value;
+        inp.value = `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
+        computeActiveWorkSec();
+      });
+    });
+  });
+}
+
+/* =================== EDITOR / EXPORT =================== */
 function openOpsEditor(){
   const ops=appState.operations.slice();
   const wrap=document.createElement("div"); wrap.className="modal-backdrop";
@@ -734,6 +844,14 @@ function bind(){
   $("btnExportCSV")?.addEventListener("click",exportCSV);
   $("btnPrint")?.addEventListener("click",()=>window.print());
   $("btnEditOps")?.addEventListener("click",openOpsEditor);
+
+  // canlı hesaplama (start/end/total breaks)
+  const recalcDeb = debounce(computeActiveWorkSec, 120);
+  $("shiftStart")?.addEventListener("input", recalcDeb);
+  $("shiftEnd")?.addEventListener("input", recalcDeb);
+  $("breaksTotal")?.addEventListener("input", recalcDeb);
+
+  attachPickers();
 }
 function init(){
   bind();

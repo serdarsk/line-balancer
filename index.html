@@ -1,12 +1,11 @@
 <!DOCTYPE html>
-<html lang="en">
 <!-- HEADER -->
 <header class="brand">
   <div class="brand__inner">
     <a class="brand__logoWrap" href="./" aria-label="Home">
       <div class="logo-bg">
         <img
-          src="assets/Img/kiel-logo.png"
+          src="img/kiel-logo.png"
           alt="Kiel Americas"
           class="brand__logo"
           decoding="async" />
@@ -34,22 +33,14 @@
   align-items: center;
   gap: 16px;
 }
+
 .brand__logo {
   height: 160px; /* 3 kat büyütüldü */
   display: block;
 }
-.brand__text {
-  display: flex;
-  flex-direction: column;
-}
-.brand__title {
-  font-size: 80px;
-  font-weight: bold;
-}
-.brand__subtitle {
-  font-size: 25px;
-  color: var(--ink-dim);
-}
+.brand__text { display: flex; flex-direction: column; }
+.brand__title { font-size: 80px; font-weight: bold; }
+.brand__subtitle { font-size: 25px; color: var(--ink-dim); }
 </style>
 
 <head>
@@ -59,22 +50,11 @@
 
   <style>
     :root{
-      --bg:#091323;
-      --card:#0c172b;
-      --border:#162744;
-      --ink:#e8eef7;
-      --ink-dim:#bcd0ea;
-      --soft:#0b1a2a;
-      --accent:#1f5b94;
-
+      --bg:#091323; --card:#0c172b; --border:#162744; --ink:#e8eef7; --ink-dim:#bcd0ea;
+      --soft:#0b1a2a; --accent:#1f5b94;
       /* draw hints (main.js okur) */
-      --st-gap:10px;
-      --st-h:112px;
-      --st-w:120px;
-      --st-w-compact:98px;
-      --st-row-gap:78px;
-      --st-label-top:14px;
-      --st-time-bottom:18px;
+      --st-gap:10px; --st-h:112px; --st-w:120px; --st-w-compact:98px;
+      --st-row-gap:78px; --st-label-top:14px; --st-time-bottom:18px;
     }
     *{box-sizing:border-box}
     html,body{height:100%}
@@ -88,17 +68,11 @@
     .grid{display:grid;gap:12px}
     .g2{grid-template-columns:360px 1fr}
 
-    .card{
-      background:var(--card);border:1px solid var(--border);
-      border-radius:14px;padding:12px;overflow:visible;
-    }
+    .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px;overflow:visible}
     h2{margin:0 0 8px;font-size:18px}
     h3{margin:12px 0 6px;font-size:15px}
     .hint{font-size:12px;color:var(--ink-dim)}
-    .badge-soft{
-      display:inline-block;background:var(--soft);border:1px solid #18314d;
-      border-radius:999px;padding:4px 8px;font-size:12px;color:#cfe2ff
-    }
+    .badge-soft{display:inline-block;background:var(--soft);border:1px solid #18314d;border-radius:999px;padding:4px 8px;font-size:12px;color:#cfe2ff}
     .pill{background:#0b1527;border:1px solid #0e213b;border-radius:999px;padding:6px 10px}
     .pillbar{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:8px}
 
@@ -108,24 +82,16 @@
       width:100%;padding:8px 10px;border-radius:10px;
       border:1px solid #1b2a44;background:#0f1b2d;color:#cfe2ff
     }
-    textarea{min-height:110px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
-
     .btn{padding:8px 12px;border-radius:10px;border:1px solid #1b2a44;background:#11243e;color:#cfe2ff;cursor:pointer}
     .btn.primary{background:#163a63;border-color:var(--accent)}
     .btn.warn{background:#2a1a12;border-color:#7b3e2b}
     .btn:disabled{opacity:.55;cursor:not-allowed}
 
     /* Simulation canvas */
-    #lineCanvas{
-      display:block;width:100%;height:auto;
-      min-height:520px;
-      background:#0b1527;border:1px solid #0e213b;border-radius:12px
-    }
-
+    #lineCanvas{display:block;width:100%;height:auto;min-height:520px;background:#0b1527;border:1px solid #0e213b;border-radius:12px}
     .pack-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(82px,1fr));gap:8px}
     .pack-item{border:1px solid #334;border-radius:8px;height:54px;display:flex;align-items:center;justify-content:center;color:#0b1527;font-weight:700}
     .pack-empty{opacity:.6;text-align:center;padding:16px}
-
     table{width:100%;border-collapse:collapse}
     th,td{border-bottom:1px dashed #18314d;padding:6px 8px;vertical-align:top}
     td.num{text-align:right}
@@ -194,17 +160,25 @@
     <div class="row">
       <div style="flex:1">
         <label>Shift Start (HH:MM)</label>
-        <input id="shiftStart" value="05:00">
+        <input id="shiftStart" value="05:00" data-picker="time">
       </div>
       <div style="flex:1">
         <label>Shift End (HH:MM)</label>
-        <input id="shiftEnd" value="13:30">
+        <input id="shiftEnd" value="13:30" data-picker="time">
       </div>
     </div>
-    <label>Breaks (one per line, HH:MM-HH:MM)</label>
-    <textarea id="breaks">07:00-07:10
-10:00-11:00
-12:30-12:40</textarea>
+
+    <!-- BREAKS TEXTAREA REMOVED -->
+    <div class="row" style="gap:8px;margin-top:6px">
+      <div style="flex:1">
+        <label>Total Breaks (HH:MM)</label>
+        <input id="breaksTotal" value="01:20" data-picker="duration">
+      </div>
+      <div style="flex:1">
+        <label>Net Work Time (HH:MM)</label>
+        <input id="netWorkTime" value="00:00" readonly>
+      </div>
+    </div>
 
     <h3>Operations JSON</h3>
     <textarea id="opsJson" placeholder='[{"id":1,"name":"OP1","durationSec":30,"preferredStation":1}]'></textarea>
@@ -300,6 +274,6 @@
   </section>
 </main>
 
-<script type="module" src="assets/js/main.js"></script>
+<script type="module" src="assets\js\main.js"></script>
 </body>
 </html>

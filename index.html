@@ -1,5 +1,76 @@
 <!DOCTYPE html>
 <html lang="en">
+<!-- HEADER -->
+<header class="brand">
+  <div class="brand__inner">
+    <a class="brand__logoWrap" href="./" aria-label="Home">
+      <div class="logo-bg">
+        <img
+          src="assets/Img/kiel-logo.png"
+          alt="Kiel Americas"
+          class="brand__logo"
+          decoding="async" />
+      </div>
+    </a>
+
+    <div class="brand__text">
+      <div class="brand__title">Line Balancer</div>
+      <div class="brand__subtitle">Kiel Americas • Production Simulation</div>
+    </div>
+  </div>
+  <div class="brand__bar"></div>
+</header>
+
+<style>
+/* Header genel */
+.brand {
+  padding: 12px 24px 0;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+}
+.brand__inner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.logo-bg {
+  background: white;
+  padding: 8px 40px;
+  border-radius: 6px;
+  transform: rotate();
+  box-shadow: 0 4px 8px rgba(0,0,0,0.25);
+}
+.brand__logo {
+  height: 160px; /* 3 kat büyütüldü */
+  display: block;
+}
+.brand__text {
+  display: flex;
+  flex-direction: column;
+}
+.brand__title {
+  font-size: 80px;
+  font-weight: bold;
+}
+.brand__subtitle {
+  font-size: 25px;
+  color: var(--ink-dim);
+}
+
+/* Bordo-Mavi Kiel Şeridi */
+.brand__bar {
+  margin-top: 8px;
+  height: 4px;
+  background: linear-gradient(
+    90deg,
+    #1f5b94 0% 60%,  /* Kiel mavi */
+    #c7243a 60% 78%, /* kırmızı kısa şerit */
+    #1f5b94 78% 100%
+  );
+}
+</style>
+
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
